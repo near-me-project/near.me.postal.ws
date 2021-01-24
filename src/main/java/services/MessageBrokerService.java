@@ -49,7 +49,8 @@ public class MessageBrokerService {
 
     private Void reject(Channel channel, Delivery delivery) {
         try {
-            channel.basicNack(delivery.getEnvelope().getDeliveryTag(), false, true);
+            System.out.println("[ERROR]: Push notification wasn't delivered to client");
+            channel.basicNack(delivery.getEnvelope().getDeliveryTag(), false, false);
             return null;
         } catch (IOException e) {
             e.printStackTrace();

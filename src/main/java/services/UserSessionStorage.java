@@ -4,28 +4,31 @@ import javax.websocket.Session;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.*;
 
 public class UserSessionStorage {
     private static Lock reentrantLock = new ReentrantLock();
-
     private static UserSessionStorage instance;
+
+    private ReadWriteLock readWriteLock;
+    private Lock readLock;
+    private Lock writeLock;
+
 
     private final ConcurrentHashMap<String, Session> usersSessionMap = new ConcurrentHashMap<>();
 
     private UserSessionStorage() {
+        boolean fair = true;
+        readWriteLock = new ReentrantReadWriteLock(fair);
+        readLock = readWriteLock.readLock();
+        writeLock = readWriteLock.writeLock();
     }
 
     public static UserSessionStorage getInstance() {
         reentrantLock.lock();
 
         try {
-
-            if (instance == null) {
-                instance = new UserSessionStorage();
-            }
-
+            if (instance == null) instance = new UserSessionStorage();
         } finally {
             reentrantLock.unlock();
         }
@@ -34,12 +37,17 @@ public class UserSessionStorage {
     }
 
     public void addSession(String clientId, Session session) {
-        usersSessionMap.put(clientId, session);
+        writeLock.lock();
+        try {
+            usersSessionMap.put(clientId, session);
+        } finally {
+            writeLock.unlock();
+        }
     }
 
     public Optional<Session> tryGetSession(String clientId, int timeout, TimeUnit timeUnit) {
         try {
-            if (reentrantLock.tryLock(timeout, timeUnit)) {
+            if (readLock.tryLock(timeout, timeUnit)) {
 
                 if (usersSessionMap.containsKey(clientId))
                     return Optional.of(usersSessionMap.get(clientId));
@@ -51,7 +59,7 @@ public class UserSessionStorage {
             System.out.println("[Error]: " + e.getMessage());
             return Optional.empty();
         } finally {
-            reentrantLock.unlock();
+            readLock.unlock();
         }
     }
 }
